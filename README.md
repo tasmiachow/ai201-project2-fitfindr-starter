@@ -133,9 +133,9 @@ Combine the 90s Track Jacket with the wide-leg khaki trousers and black combat b
 <!-- Answer both questions with at least 2–3 sentences each. -->
 
 **One way planning.md helped during implementation:**
-It helped map out exactly how information travels between tools before writing any code. Noticing early on that the market listings file used a "title" label while the user wardrobe file used a "name" label kept me from breaking the code with dictionary lookup errors.
+     It helped map out exactly how information travels between tools before writing any code. Noticing early on that the market listings file used a "title" label while the user wardrobe file used a "name" label kept me from breaking the code with dictionary lookup errors.
 **One divergence from your spec, and why:**
-I chose to use a continuous while loop driven by a phase name tracker rather than a rigid top-to-bottom recipe. This structure makes it incredibly clean to exit early or skip directly to error logging the exact moment a tool reports zero matching results.
+     I chose to use a continuous while loop driven by a phase name tracker rather than a rigid top-to-bottom recipe. This structure makes it incredibly clean to exit early or skip directly to error logging the exact moment a tool reports zero matching results.
 ---
 
 ## Where to Start
