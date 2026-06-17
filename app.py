@@ -44,7 +44,44 @@ def handle_query(user_query: str, wardrobe_choice: str) -> tuple[str, str, str]:
            session["fit_card"].
     """
     # TODO: implement this function
-    return "Agent not yet implemented.", "", ""
+    if not user_query or not user_query.strip():
+        return "Please type a valid search query before clicking submit.", "", ""
+
+    # 2. Select the wardrobe based on wardrobe_choice
+    if wardrobe_choice == "Example wardrobe":
+        wardrobe = get_example_wardrobe()
+    else:
+        wardrobe = get_empty_wardrobe()
+
+    # 3. Call run_agent() with the query and selected wardrobe
+    session = run_agent(user_query, wardrobe)
+
+    # 4. If session["error"] is set, return the error in the first panel
+    if session.get("error"):
+        return f"❌ Error: {session['error']}", "", ""
+
+    # 5. Format session["selected_item"] into a readable listing_text string
+    item = session.get("selected_item")
+    if not item:
+        return "❌ Error: Could not retrieve item details.", "", ""
+
+    # Making a clean, structured visual breakdown of the top listing found
+    listing_text = f"""🔥 TOP MATCH FOUND!
+
+        📌 Title: {item.get('title')}
+        🏷️ Brand: {item.get('brand', 'Unknown Brand')}
+        💰 Price: ${item.get('price')}
+        📏 Size: {item.get('size', 'N/A')}
+        🎨 Colors: {', '.join(item.get('colors', []))}
+        📲 Platform: {item.get('platform', 'N/A').upper()}
+        ✨ Match Score: {item.get('score', 0)}
+
+        📝 Description:
+        {item.get('description')}
+    """
+
+    # Return our formatted item card, the outfit ideas text, and the social media caption text
+    return listing_text, session.get("outfit_suggestion", ""), session.get("fit_card", "")
 
 
 # ── interface ─────────────────────────────────────────────────────────────────

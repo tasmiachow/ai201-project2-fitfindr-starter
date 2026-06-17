@@ -16,7 +16,7 @@ import os
 
 from dotenv import load_dotenv
 from groq import Groq
-
+from config import GROQ_API_KEY, LLM_MODEL, MAX_TOOL_ROUNDS
 from utils.data_loader import load_listings
 
 load_dotenv()
@@ -33,8 +33,19 @@ def _get_groq_client():
         )
     return Groq(api_key=api_key)
 
+_client = Groq(api_key=GROQ_API_KEY)
 
 # ── Tool 1: search_listings ───────────────────────────────────────────────────
+# def cache_desc():
+#     dict = {}
+#     listings = load_listings
+#     for desc in listings["description"]:
+        
+#         sorted_desc = sorted(desc.lower().split(""))
+#         dict[desc] = sorted_desc
+#     return sorted_desc
+
+# _CACHED_DESC = cache_desc
 
 def search_listings(
     description: str,
@@ -70,7 +81,39 @@ def search_listings(
     Before writing code, fill in the Tool 1 section of planning.md.
     """
     # Replace this with your implementation
-    return []
+    listings = load_listings()
+    score = {}
+    if max_price:
+        listings = [item for item in listings if item["price"] <= max_price]
+
+    # Filter by size if size is provided
+    if size:
+        listings = [item for item in listings if item["size"] == size]
+    
+    search_keywords = set(description.lower().split())
+    
+    scored_listings = []
+    
+    # 3. Score each remaining listing
+    for item in listings:
+        # Turn the item's description into a list of lowercase words
+        desc_words = item["description"].lower().split()
+        
+        # Count how many search keywords appear in this description
+        score = sum(1 for word in desc_words if word in search_keywords)
+        
+        # 4. Drop any listings with a score of 0
+        if score > 0:
+            # Dynamically inject the score into the dictionary so we can sort by it
+            item_with_score = item.copy()
+            item_with_score["score"] = score
+            scored_listings.append(item_with_score)
+            
+    # 5. Sort by score, highest first
+    # lambda x: x["score"] tells Python to sort using the score value
+    scored_listings.sort(key=lambda x: x["score"], reverse=True)
+
+    return scored_listings
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
@@ -101,7 +144,57 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     Before writing code, fill in the Tool 2 section of planning.md.
     """
     # Replace this with your implementation
-    return ""
+    wardrobe_items = wardrobe.get('items', [])
+    
+    # 1. New item uses 'title' from _listings.json
+    item_title = new_item.get('title', 'this item')
+    item_brand = new_item.get('brand') or 'Unknown Brand'
+    if not wardrobe_items: 
+        # 2. Empty Wardrobe Prompt
+        prompt = f"The user is considering buying this item: {item_title} by brand: {item_brand}. Their wardrobe is empty. Provide general styling advice, what kinds of items pair well, and what vibe it suits."
+    else:
+        # 3. Format the wardrobe items into a readable string
+        wardrobe_lines = []
+        for item in wardrobe_items:
+            w_name = item.get('name', 'Unnamed Piece')
+            w_cat = item.get('category', 'clothing')
+            wardrobe_lines.append(f"- {w_name} ({w_cat})")
+            
+        wardrobe_str = "\n".join(wardrobe_lines)
+        
+        prompt = f"""
+            The user is considering buying: {item_title} (Brand: {item_brand}).
+            
+            Suggest 1 to 2 complete outfits styling this new item by pairing it with specific pieces from their current wardrobe listed below:
+            {wardrobe_str}
+            
+            Be specific about which wardrobe items to pick and describe the resulting outfit vibe.
+        """
+
+    # Connect to Groq API
+    try:
+        response = _client.chat.completions.create(
+            model=LLM_MODEL,  
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "You are an expert personal fashion stylist. Give clear, concise outfit suggestions."
+                },
+                {
+                    "role": "user", 
+                    "content": prompt
+                }
+            ],
+            temperature=0.7
+        )
+        
+        # 4. Return the LLM's response as a string
+        return response.choices[0].message.content
+
+    except Exception as e:
+        # Graceful fallback if the API call fails
+        print(f"Groq API Error: {e}")
+        return f"Styling advice is currently unavailable, but that {new_item['brand']} item looks great!"
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
@@ -134,4 +227,54 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     Before writing code, fill in the Tool 3 section of planning.md.
     """
     # Replace this with your implementation
-    return ""
+    if not outfit or not outfit.strip():
+        return "Error: Cannot generate a caption because no outfit suggestion was provided."
+
+    # Extract details for easy prompt integration
+    item_title = new_item.get("title", "this thrifted find")
+    price = new_item.get("price", "thrifted price")
+    platform = new_item.get("platform", "online")
+
+    # 2. Build a prompt detailing the item information and style requirements
+    prompt = f"""
+        Create a short, shareable social media caption (Instagram/TikTok style) for an outfit.
+
+        Item Details:
+        - Item Name: {item_title}
+        - Price: ${price}
+        - Platform: {platform}
+        
+        Outfit Concept:
+        {outfit}
+
+        Strict Rules:
+        1. Keep it brief: exactly 2 to 4 sentences total.
+        2. Feel casual, enthusiastic, and authentic—like a real person posting an OOTD, not an advertisement.
+        3. Naturally mention the item name, price (include '$'), and platform exactly once each. 
+        4. Focus on capturing the specific vibe of the outfit.
+        5. Do not include meta-text, markdown tags, hashtags, or emoji placeholders like '[emoji]'. Real emojis are fine.
+    """
+
+    # 3. Call the LLM with a higher temperature for natural variety
+    try:
+        response = _client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "You are a trendsetting social media manager specializing in fashion, streetwear, and thrifting content."
+                },
+                {
+                    "role": "user", 
+                    "content": prompt
+                }
+            ],
+            temperature=0.95  # Higher temperature makes the captions sound different each time
+        )
+        
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        # Gracefully handle API errors without raising an exception
+        print(f"Groq API Error in create_fit_card: {e}")
+        return f"Just styled this amazing {item_title} I found on {platform} for only ${price}! Loving how it completes the vibe."

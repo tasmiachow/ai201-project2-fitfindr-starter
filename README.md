@@ -74,28 +74,45 @@ Your README submission must document each tool's name, inputs, and return value.
      Walk through this carefully — it's how graders follow your agent's reasoning without a live demo.
      Use a specific example — do not leave this as a template. -->
 
-**User query:**
+**User query:** "looking for a 90s track jacket in size M"
 
 **Step 1 — Tool called:**
-- Tool:
-- Input:
-- Why this tool:
-- Output:
+- Tool: search_listings
+- Input:max_price (float/int or None), size (str or None), description (str)
+- Why this tool: To find all available listing that best match the requested description style.
+- Output: 🔥 TOP MATCH FOUND!
+
+        📌 Title: 90s Track Jacket — Navy/White Stripe
+        🏷️ Brand: Champion
+        💰 Price: $45.0
+        📏 Size: M
+        🎨 Colors: navy, white
+        📲 Platform: POSHMARK
+        ✨ Match Score: 3
+
+        📝 Description:
+        Authentic 90s track jacket with stripe detail down the sleeves. Full zip. Lightweight — great for layering.
 
 **Step 2 — Tool called:**
-- Tool:
-- Input:
-- Why this tool:
-- Output:
+- Tool: suggest_outfit
+- Input: new_item='', wardrobe={}
+- Why this tool: To create a full outfit look by combining the discovered thrift store item with actual clothing pieces currently inside the user's closet.
+- Output: To style the 90s Track Jacket — Navy/White Stripe from Champion, I suggest two complete outfits:
+
+**Outfit 1: Casual Streetwear**
+Pair the 90s Track Jacket with the baggy straight-leg jeans (dark wash) and chunky white sneakers. Add the white ribbed tank top underneath the jacket for a layered look. Finish the outfit with the brown leather belt and black crossbody bag for a relaxed, casual vibe that's perfect for everyday wear. This outfit exudes a classic 90s streetwear feel with a modern twist.
+
+**Outfit 2: Sporty Chic**
+Combine the 90s Track Jacket with the wide-leg khaki trousers and black combat boots for a sporty yet stylish ensemble. Layer the oversized grey crewneck sweatshirt under the jacket for a cozy touch. This outfit has a great balance of sporty and chic elements, making it ideal for a casual day out or a low-key evening event. The contrast between the navy/white stripe jacket and the khaki trousers adds a nice visual interest to the overall look.
 
 **Step 3 — Tool called:**
-- Tool:
-- Input:
-- Why this tool:
-- Output:
+- Tool: create_fit_card
+- Input: outfit, new_item, price, platform 
+- Why this tool: To take the generated style suggestions and turn them into a short, upbeat, ready-to-post caption for social media.
+- Output: I'm loving this casual streetwear vibe I've got going on today, all thanks to my new 90s Track Jacket — Navy/White Stripe from Poshmark for $45.0. I paired it with some baggy straight-leg jeans, chunky white sneakers, and a white ribbed tank top for a relaxed look that's giving me major 90s feels 🙌. The combo is perfect for everyday wear, and I'm all about that laid-back style 🛍️. This jacket is totally a wardrobe staple!
 
 **Final output to user:**
-
+ A found listing with suggestions from their example wardrobe and a short caption. 
 ---
 
 ## Error Handling and Fail Points
@@ -105,9 +122,9 @@ Your README submission must document each tool's name, inputs, and return value.
 
 | Tool | Failure mode | Agent response |
 |------|-------------|----------------|
-| `search_listings` | | |
-| `suggest_outfit` | | |
-| `create_fit_card` | | |
+| `search_listings` |No listings match the price, size, or description parameters. | Saves a clear explanation message to the session error key and stops the execution loop early so empty data isn't passed along.|
+| `suggest_outfit` | The AI network call drops or a wardrobe key is formatted unexpectedly. | Catches the issue safely, avoids a system crash by using backup lookup text defaults, and provides a friendly offline advice note.|
+| `create_fit_card` | The provided outfit text input is empty, blank, or the AI request fails. | Returns a charming, pre-built fallback post template filled in with the item name, price, and marketplace so the user still gets an output. |
 
 ---
 
@@ -116,9 +133,9 @@ Your README submission must document each tool's name, inputs, and return value.
 <!-- Answer both questions with at least 2–3 sentences each. -->
 
 **One way planning.md helped during implementation:**
-
+It helped map out exactly how information travels between tools before writing any code. Noticing early on that the market listings file used a "title" label while the user wardrobe file used a "name" label kept me from breaking the code with dictionary lookup errors.
 **One divergence from your spec, and why:**
-
+I chose to use a continuous while loop driven by a phase name tracker rather than a rigid top-to-bottom recipe. This structure makes it incredibly clean to exit early or skip directly to error logging the exact moment a tool reports zero matching results.
 ---
 
 ## Where to Start

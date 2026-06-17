@@ -18,10 +18,15 @@ Usage (once implemented):
     print(result["error"])   # None on success
 """
 
+
+import os
+import json
+from dotenv import load_dotenv
+from groq import Groq
+from config import GROQ_API_KEY, LLM_MODEL, MAX_TOOL_ROUNDS
 from tools import search_listings, suggest_outfit, create_fit_card
-
-
 # ── session state ─────────────────────────────────────────────────────────────
+_client = Groq(api_key=GROQ_API_KEY)
 
 def _new_session(query: str, wardrobe: dict) -> dict:
     """
@@ -94,7 +99,93 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     """
     # TODO: implement the planning loop
     session = _new_session(query, wardrobe)
-    session["error"] = "Planning loop not yet implemented."
+    
+    current_phase = "PARSE_QUERY"
+    tool_rounds = 0
+    
+    # The main loop keeps spinning until we hit an error, complete the final phase, or break
+    while current_phase is not None:
+        tool_rounds += 1
+        
+        # Circuit Breaker Guard
+        if tool_rounds > MAX_TOOL_ROUNDS:
+            session["error"] = f"Agent stopped: Exceeded MAX_TOOL_ROUNDS limit of {MAX_TOOL_ROUNDS}."
+            break
+
+        # --- PHASE 1: PARSE QUERY ---
+        if current_phase == "PARSE_QUERY":
+            try:
+                parsing_prompt = f"""You are a strict data extraction engine. Analyze this shopping query: "{query}"
+                
+                    Extract these 3 fields:
+                    1. "description": Keywords describing the item.
+                    2. "size": Size string if mentioned, else null.
+                    3. "max_price": Number for max price if mentioned, else null. Do not include currency symbols.
+
+                    Your response must be ONLY a raw JSON object. No conversation, no markdown formatting blocks, no explanation.
+                    Format:
+                    {{
+                        "description": "string",
+                        "size": "string" or null,
+                        "max_price": number or null
+                    }}"""  
+                response = _client.chat.completions.create(
+                    model=LLM_MODEL,
+                    messages=[{"role": "user", "content": parsing_prompt}],
+                    temperature=0.0
+                )
+                cleaned_response = response.choices[0].message.content.strip()
+                if cleaned_response.startswith("```"):
+                    cleaned_response = cleaned_response.strip("`").replace("json", "", 1).strip()
+                
+                session["parsed"] = json.loads(cleaned_response)
+                
+                # Advance to next phase upon success
+                current_phase = "SEARCH_LISTINGS"
+                
+            except Exception as e:
+                session["error"] = f"Failed to parse user query: {str(e)}"
+                current_phase = None  # Terminate loop early
+
+        # --- PHASE 2: SEARCH LISTINGS ---
+        elif current_phase == "SEARCH_LISTINGS":
+            try:
+                search_results = search_listings(
+                    description=session["parsed"].get("description", ""),
+                    size=session["parsed"].get("size"),
+                    max_price=session["parsed"].get("max_price")
+                )
+                session["search_results"] = search_results
+                
+                if not search_results:
+                    session["error"] = "No listings found matching your search parameters."
+                    current_phase = None  # Terminate early
+                else:
+                    session["selected_item"] = search_results[0]
+                    current_phase = "SUGGEST_OUTFIT"  # Advance
+                    
+            except Exception as e:
+                session["error"] = f"Error during search execution: {str(e)}"
+                current_phase = None
+
+        # --- PHASE 3: SUGGEST OUTFIT ---
+        elif current_phase == "SUGGEST_OUTFIT":
+            try:
+                session["outfit_suggestion"] = suggest_outfit(session["selected_item"], session["wardrobe"])
+                current_phase = "CREATE_FIT_CARD"  # Advance
+            except Exception as e:
+                session["error"] = f"Failed to generate outfit suggestion: {str(e)}"
+                current_phase = None
+
+        # --- PHASE 4: CREATE FIT CARD ---
+        elif current_phase == "CREATE_FIT_CARD":
+            try:
+                session["fit_card"] = create_fit_card(session["outfit_suggestion"], session["selected_item"])
+                current_phase = None  # Goal achieved! Clean break out of loop
+            except Exception as e:
+                session["error"] = f"Failed to generate fit card caption: {str(e)}"
+                current_phase = None
+
     return session
 
 

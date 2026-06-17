@@ -17,6 +17,8 @@ You must have at least 3 tools. The three required tools are listed — add any 
 **What it does:**
 <!-- Describe what this tool does in 1–2 sentences -->
 
+The tool looks through listings.json and filters by max_price and size if one/both are provided. After that it will look through descr and rank from highest matching the users. 
+
 **Input parameters:**
 <!-- List each parameter, its type, and what it represents -->
 - `description` (str): ...
@@ -25,16 +27,17 @@ You must have at least 3 tools. The three required tools are listed — add any 
 
 **What it returns:**
 <!-- Describe the return value — what fields does a result contain? -->
-
+highest ranked item and return the listing dict for that. 
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if no listings match? -->
-
+return a {found: False} and the original parameters and say there is nothing like that in stock.
 ---
 
 ### Tool 2: suggest_outfit
 
 **What it does:**
 <!-- Describe what this tool does in 1–2 sentences -->
+takes in a new item, and looks at the users wardrobe. based on the case, if nothing is in wardrobe it suggest pieces with the new_item else look thru the users wardrobe and suggest pieces from there first. 
 
 **Input parameters:**
 <!-- List each parameter, its type, and what it represents -->
@@ -43,16 +46,21 @@ You must have at least 3 tools. The three required tools are listed — add any 
 
 **What it returns:**
 <!-- Describe the return value -->
-
+Return the LLM's response as a string.
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if the wardrobe is empty or no outfit can be suggested? -->
+Suggest general styling advice 
+
 
 ---
+
+
 
 ### Tool 3: create_fit_card
 
 **What it does:**
 <!-- Describe what this tool does in 1–2 sentences -->
+ Generate a short, shareable outfit caption for the thrifted find.
 
 **Input parameters:**
 <!-- List each parameter, its type, and what it represents -->
@@ -61,9 +69,13 @@ You must have at least 3 tools. The three required tools are listed — add any 
 
 **What it returns:**
 <!-- Describe the return value -->
+ A 2–4 sentence string usable as an Instagram/TikTok caption.
+       
 
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if the outfit data is incomplete? -->
+ If outfit is empty or missing, return a descriptive error message
+        string — do NOT raise an exception.
 
 ---
 
@@ -93,7 +105,7 @@ For each tool, describe the specific failure mode you're handling and what the a
 
 | Tool | Failure mode | Agent response |
 |------|-------------|----------------|
-| search_listings | No results match the query | |
+| search_listings | No results match the query | Hi, unfortunately we don't have any items that macth your requirements. Try sizing up or removing your budget.|
 | suggest_outfit | Wardrobe is empty | |
 | create_fit_card | Outfit input is missing or incomplete | |
 
@@ -111,6 +123,30 @@ For each tool, describe the specific failure mode you're handling and what the a
      an embedded image or screenshot cannot be evaluated.
      You'll share this diagram with an AI tool when asking it to implement
      the planning loop and each individual tool. -->
+
+User query
+    │
+    ▼
+Planning Loop ───────────────────────────────────────────┐
+    │                                                    │
+    ├─► search_listings(description, size, max_price)    │
+    │       │ results=[]                                 │
+    │       ├──► [ERROR] "No listings found..." → return │
+    │       │                                            │
+    │       │ results=[item, ...]                        │
+    │       ▼                                            │
+    │   Session: selected_item = results[0]              │
+    │       │                                            │
+    ├─► suggest_outfit(selected_item, wardrobe)          │
+    │       │                                            │
+    │   Session: outfit_suggestion = "..."               │
+    │       │                                            │
+    └─► create_fit_card(outfit_suggestion, selected_item)│
+            │                                            │
+        Session: fit_card = "..."                        │
+            │                                            └─ error path returns here
+            ▼
+        Return session
 
 ---
 
